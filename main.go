@@ -7,12 +7,15 @@ import (
 	"os"
 )
 
-func run() int {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, `
-Usage of %s:
+func usage() {
+	fmt.Fprintf(os.Stderr, `Usage of %s:
 	%s [OPTION]... PATTERNS [FILE]...
 `, os.Args[0], os.Args[0])
+}
+
+func run() int {
+	flag.Usage = func() {
+		usage()
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -20,7 +23,8 @@ Usage of %s:
 
 	ch := make(chan string)
 	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "arguments should be set\n")
+		usage()
+		fmt.Fprintf(os.Stderr, "Try '%s --help' for more information.", os.Args[0])
 		return 1
 	}
 
