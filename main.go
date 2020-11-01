@@ -7,7 +7,10 @@ import (
 	"os"
 
 	"github.com/mattn/go-isatty"
+	"golang.org/x/sync/errgroup"
 )
+
+var isTerminal = isatty.IsTerminal(os.Stdout.Fd())
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage of %s:
@@ -45,10 +48,17 @@ func run() int {
 
 	if len(files) == 0 {
 		ch := make(chan string)
+		var eg errgroup.Group
 		if useRegexp {
-			go searchWithRegexp(ch, os.Stdin, query, isatty.IsTerminal(os.Stdout.Fd()))
+			eg.Go(func() error {
+				err := searchWithRegexp(ch, os.Stdin, query, isTerminal)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
 		} else {
-			go search(ch, os.Stdin, query, isatty.IsTerminal(os.Stdout.Fd()))
+			go search(ch, os.Stdin, query, isTerminal)
 		}
 
 		w := bufio.NewWriter(os.Stdout)
@@ -60,6 +70,12 @@ func run() int {
 			}
 		}
 		err := w.Flush()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, err.Error())
+			return 1
+		}
+
+		err = eg.Wait()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, err.Error())
 			return 1

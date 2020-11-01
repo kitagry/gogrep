@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/koron-go/prefixw"
-	"github.com/mattn/go-isatty"
+	"golang.org/x/sync/errgroup"
 )
 
 func searchFiles(filenames []string, query string, useRegexp bool) error {
@@ -21,10 +21,17 @@ func searchFiles(filenames []string, query string, useRegexp bool) error {
 		defer f.Close()
 
 		ch := make(chan string)
+		var eg errgroup.Group
 		if useRegexp {
-			go searchWithRegexp(ch, f, query, isatty.IsTerminal(os.Stdout.Fd()))
+			eg.Go(func() error {
+				err := searchWithRegexp(ch, f, query, isTerminal)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
 		} else {
-			go search(ch, f, query, isatty.IsTerminal(os.Stdout.Fd()))
+			go search(ch, f, query, isTerminal)
 		}
 
 		var w io.Writer
@@ -33,13 +40,20 @@ func searchFiles(filenames []string, query string, useRegexp bool) error {
 		if len(filenames) > 1 {
 			w = prefixw.New(w, filename+": ")
 		}
+
 		for s := range ch {
 			_, err = w.Write([]byte(s + "\n"))
 			if err != nil {
 				return err
 			}
 		}
+
 		err = bw.Flush()
+		if err != nil {
+			return err
+		}
+
+		err = eg.Wait()
 		if err != nil {
 			return err
 		}
@@ -48,6 +62,7 @@ func searchFiles(filenames []string, query string, useRegexp bool) error {
 }
 
 func search(ch chan<- string, data io.Reader, query string, colorized bool) {
+	defer close(ch)
 	sc := bufio.NewScanner(data)
 	sc.Split(bufio.ScanLines)
 
@@ -61,10 +76,10 @@ func search(ch chan<- string, data io.Reader, query string, colorized bool) {
 			}
 		}
 	}
-	close(ch)
 }
 
 func searchWithRegexp(ch chan<- string, data io.Reader, query string, colorized bool) error {
+	defer close(ch)
 	sc := bufio.NewScanner(data)
 	sc.Split(bufio.ScanLines)
 
@@ -87,6 +102,5 @@ func searchWithRegexp(ch chan<- string, data io.Reader, query string, colorized 
 			}
 		}
 	}
-	close(ch)
 	return nil
 }
