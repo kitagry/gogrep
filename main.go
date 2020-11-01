@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/mattn/go-isatty"
 )
 
 func usage() {
@@ -30,7 +32,7 @@ func run() int {
 
 	query := args[0]
 	if len(args) == 1 {
-		go search(ch, os.Stdin, query)
+		go search(ch, os.Stdin, query, isatty.IsTerminal(os.Stdout.Fd()))
 
 		w := bufio.NewWriter(os.Stdout)
 		for s := range ch {

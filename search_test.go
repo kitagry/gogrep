@@ -16,7 +16,7 @@ bbbaaaccc
 `)
 		query := "aaa"
 		ch := make(chan string)
-		go search(ch, data, query)
+		go search(ch, data, query, false)
 
 		results := make([]string, 0)
 		for result := range ch {
