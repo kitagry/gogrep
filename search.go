@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/koron-go/prefixw"
 )
 
 func searchFiles(filenames []string, query string) error {
@@ -19,15 +21,22 @@ func searchFiles(filenames []string, query string) error {
 		ch := make(chan string)
 		go search(ch, f, query)
 
-		w := bufio.NewWriter(os.Stdout)
-		for s := range ch {
-			// TODO: use bytes for performance.
-			if len(filenames) > 1 {
-				w.WriteString(filename + ": ")
-			}
-			w.WriteString(s + "\n")
+		var w io.Writer
+		bw := bufio.NewWriter(os.Stdout)
+		w = bw
+		if len(filenames) > 1 {
+			w = prefixw.New(w, filename+": ")
 		}
-		w.Flush()
+		for s := range ch {
+			_, err = w.Write([]byte(s + "\n"))
+			if err != nil {
+				return err
+			}
+		}
+		err = bw.Flush()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
