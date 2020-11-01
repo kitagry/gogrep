@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/koron-go/prefixw"
+	"github.com/mattn/go-isatty"
 )
 
 func searchFiles(filenames []string, query string) error {
@@ -47,8 +48,12 @@ func search(ch chan<- string, data io.Reader, query string) {
 
 	for sc.Scan() {
 		t := sc.Text()
-		if strings.Contains(t, query) {
-			ch <- t
+		if ind := strings.Index(t, query); ind != -1 {
+			if isatty.IsTerminal(os.Stdout.Fd()) {
+				ch <- t[:ind] + "\033[33;100m" + t[ind:ind+len(query)] + "\033[0m" + t[ind+len(query):]
+			} else {
+				ch <- t
+			}
 		}
 	}
 	close(ch)

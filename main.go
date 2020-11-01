@@ -34,9 +34,17 @@ func run() int {
 
 		w := bufio.NewWriter(os.Stdout)
 		for s := range ch {
-			w.WriteString(s + "\n")
+			_, err := w.WriteString(s + "\n")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, err.Error())
+				return 1
+			}
 		}
-		w.Flush()
+		err := w.Flush()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, err.Error())
+			return 1
+		}
 	} else {
 		err := searchFiles(args[1:], query)
 		if err != nil {
