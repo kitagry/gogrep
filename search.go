@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/koron-go/prefixw"
 	"github.com/mattn/go-isatty"
 )
 
-func searchFiles(filenames []string, query string) error {
+func searchFiles(filenames []string, query string, useRegexp bool) error {
 	for _, filename := range filenames {
 		f, err := os.Open(filename)
 		if err != nil {
@@ -20,7 +21,11 @@ func searchFiles(filenames []string, query string) error {
 		defer f.Close()
 
 		ch := make(chan string)
-		go search(ch, f, query, isatty.IsTerminal(os.Stdout.Fd()))
+		if useRegexp {
+			go searchWithRegexp(ch, f, query, isatty.IsTerminal(os.Stdout.Fd()))
+		} else {
+			go search(ch, f, query, isatty.IsTerminal(os.Stdout.Fd()))
+		}
 
 		var w io.Writer
 		bw := bufio.NewWriter(os.Stdout)
@@ -57,4 +62,31 @@ func search(ch chan<- string, data io.Reader, query string, colorized bool) {
 		}
 	}
 	close(ch)
+}
+
+func searchWithRegexp(ch chan<- string, data io.Reader, query string, colorized bool) error {
+	sc := bufio.NewScanner(data)
+	sc.Split(bufio.ScanLines)
+
+	mu, err := regexp.Compile(query)
+	if err != nil {
+		return err
+	}
+
+	for sc.Scan() {
+		t := sc.Text()
+		if mu.MatchString(t) {
+			if colorized {
+				strs := mu.FindAllString(t, -1)
+				for _, str := range strs {
+					t = strings.Replace(t, str, "\033[33;100m"+str+"\033[0m", 1)
+				}
+				ch <- t
+			} else {
+				ch <- t
+			}
+		}
+	}
+	close(ch)
+	return nil
 }
