@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func searchFiles(filenames []string, query string, useRegexp bool) error {
+func searchFiles(filenames []string, query string, useRegexp bool, invert bool) error {
 	for _, filename := range filenames {
 		f, err := os.Open(filename)
 		if err != nil {
@@ -24,14 +24,14 @@ func searchFiles(filenames []string, query string, useRegexp bool) error {
 		var eg errgroup.Group
 		if useRegexp {
 			eg.Go(func() error {
-				err := searchWithRegexp(ch, f, query, isTerminal)
+				err := searchWithRegexp(ch, f, query, isTerminal, invert)
 				if err != nil {
 					return err
 				}
 				return nil
 			})
 		} else {
-			go search(ch, f, query, isTerminal)
+			go search(ch, f, query, isTerminal, invert)
 		}
 
 		var w io.Writer
@@ -61,24 +61,31 @@ func searchFiles(filenames []string, query string, useRegexp bool) error {
 	return nil
 }
 
-func search(ch chan<- string, data io.Reader, query string, colorized bool) {
+func colorizedText(s string) string {
+	return "\033[33;100m" + s + "\033[0m"
+}
+
+func search(ch chan<- string, data io.Reader, query string, colorized, invert bool) {
 	defer close(ch)
 	sc := bufio.NewScanner(data)
 	sc.Split(bufio.ScanLines)
 
 	for sc.Scan() {
 		t := sc.Text()
-		if ind := strings.Index(t, query); ind != -1 {
+		ind := strings.Index(t, query)
+		if ind != -1 && !invert {
 			if colorized {
-				ch <- t[:ind] + "\033[33;100m" + t[ind:ind+len(query)] + "\033[0m" + t[ind+len(query):]
+				ch <- t[:ind] + colorizedText(t[ind:ind+len(query)]) + t[ind+len(query):]
 			} else {
 				ch <- t
 			}
+		} else if ind == -1 && invert {
+			ch <- t
 		}
 	}
 }
 
-func searchWithRegexp(ch chan<- string, data io.Reader, query string, colorized bool) error {
+func searchWithRegexp(ch chan<- string, data io.Reader, query string, colorized bool, invert bool) error {
 	defer close(ch)
 	sc := bufio.NewScanner(data)
 	sc.Split(bufio.ScanLines)
@@ -90,16 +97,19 @@ func searchWithRegexp(ch chan<- string, data io.Reader, query string, colorized 
 
 	for sc.Scan() {
 		t := sc.Text()
-		if mu.MatchString(t) {
+		match := mu.MatchString(t)
+		if match && !invert {
 			if colorized {
 				strs := mu.FindAllString(t, -1)
 				for _, str := range strs {
-					t = strings.Replace(t, str, "\033[33;100m"+str+"\033[0m", 1)
+					t = strings.Replace(t, str, colorizedText(str), 1)
 				}
 				ch <- t
 			} else {
 				ch <- t
 			}
+		} else if !match && invert {
+			ch <- t
 		}
 	}
 	return nil

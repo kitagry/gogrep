@@ -36,6 +36,7 @@ func run() int {
 		flag.PrintDefaults()
 	}
 	exp := flag.String("e", "", "use PATTERNS for matching")
+	invert := flag.Bool("v", false, "select non-matching lines")
 	flag.Parse()
 	args := flag.Args()
 
@@ -51,14 +52,14 @@ func run() int {
 		var eg errgroup.Group
 		if useRegexp {
 			eg.Go(func() error {
-				err := searchWithRegexp(ch, os.Stdin, query, isTerminal)
+				err := searchWithRegexp(ch, os.Stdin, query, isTerminal, *invert)
 				if err != nil {
 					return err
 				}
 				return nil
 			})
 		} else {
-			go search(ch, os.Stdin, query, isTerminal)
+			go search(ch, os.Stdin, query, isTerminal, *invert)
 		}
 
 		w := bufio.NewWriter(os.Stdout)
@@ -81,7 +82,7 @@ func run() int {
 			return 1
 		}
 	} else {
-		err := searchFiles(files, query, useRegexp)
+		err := searchFiles(files, query, useRegexp, *invert)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return 1
