@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func searchFiles(filenames []string, query string, useRegexp bool, invert bool) error {
+func searchFiles(filenames []string, sq searchQuery) error {
 	for _, filename := range filenames {
 		f, err := os.Open(filename)
 		if err != nil {
@@ -22,17 +22,13 @@ func searchFiles(filenames []string, query string, useRegexp bool, invert bool) 
 
 		ch := make(chan string)
 		var eg errgroup.Group
-		if useRegexp {
-			eg.Go(func() error {
-				err := searchWithRegexp(ch, f, query, isTerminal, invert)
-				if err != nil {
-					return err
-				}
-				return nil
-			})
-		} else {
-			go search(ch, f, query, isTerminal, invert)
-		}
+		eg.Go(func() error {
+			err := Search(ch, f, sq)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 
 		var w io.Writer
 		bw := bufio.NewWriter(os.Stdout)
@@ -63,6 +59,14 @@ func searchFiles(filenames []string, query string, useRegexp bool, invert bool) 
 
 func colorizedText(s string) string {
 	return "\033[33;100m" + s + "\033[0m"
+}
+
+func Search(ch chan<- string, data io.Reader, q searchQuery) error {
+	if q.Regexp {
+		return searchWithRegexp(ch, data, q.Query, q.Colorized, q.Invert)
+	}
+	search(ch, data, q.Query, q.Colorized, q.Invert)
+	return nil
 }
 
 func search(ch chan<- string, data io.Reader, query string, colorized, invert bool) {

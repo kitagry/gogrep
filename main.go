@@ -12,6 +12,31 @@ import (
 
 var isTerminal = isatty.IsTerminal(os.Stdout.Fd())
 
+type searchQuery struct {
+	Query  string
+	Regexp bool
+
+	Colorized bool
+
+	Invert bool
+}
+
+func (s searchQuery) parse(args []string) (searchQuery, []string, error) {
+	copy := s
+	copy.Colorized = isTerminal
+	if s.Query != "" {
+		copy.Regexp = true
+		return copy, args, nil
+	}
+
+	if len(args) == 0 {
+		return copy, nil, fmt.Errorf("query should be set")
+	}
+
+	copy.Query = args[0]
+	return copy, args[1:], nil
+}
+
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage of %s:
 	%s [OPTION]... PATTERNS [FILE]...
@@ -35,12 +60,15 @@ func run() int {
 		usage()
 		flag.PrintDefaults()
 	}
-	exp := flag.String("e", "", "use PATTERNS for matching")
-	invert := flag.Bool("v", false, "select non-matching lines")
+	sq := searchQuery{}
+	flag.StringVar(&sq.Query, "e", "", "use PATTERNS for matching")
+	flag.BoolVar(&sq.Invert, "v", false, "select non-matching lines")
 	flag.Parse()
 	args := flag.Args()
 
-	query, files, useRegexp, err := parseQueries(args, exp)
+	var files []string
+	var err error
+	sq, files, err = sq.parse(args)
 	if err != nil {
 		usage()
 		fmt.Fprintf(os.Stderr, "Try '%s --help' for more information.", os.Args[0])
@@ -50,17 +78,13 @@ func run() int {
 	if len(files) == 0 {
 		ch := make(chan string)
 		var eg errgroup.Group
-		if useRegexp {
-			eg.Go(func() error {
-				err := searchWithRegexp(ch, os.Stdin, query, isTerminal, *invert)
-				if err != nil {
-					return err
-				}
-				return nil
-			})
-		} else {
-			go search(ch, os.Stdin, query, isTerminal, *invert)
-		}
+		eg.Go(func() error {
+			err := Search(ch, os.Stdin, sq)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 
 		w := bufio.NewWriter(os.Stdout)
 		for s := range ch {
@@ -82,7 +106,7 @@ func run() int {
 			return 1
 		}
 	} else {
-		err := searchFiles(files, query, useRegexp, *invert)
+		err := searchFiles(files, sq)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return 1
