@@ -19,6 +19,8 @@ type searchQuery struct {
 	Colorized bool
 
 	Invert bool
+
+	MaxCount int
 }
 
 func (s searchQuery) parse(args []string) (searchQuery, []string, error) {
@@ -63,6 +65,7 @@ func run() int {
 	sq := searchQuery{}
 	flag.StringVar(&sq.Query, "e", "", "use PATTERNS for matching")
 	flag.BoolVar(&sq.Invert, "v", false, "select non-matching lines")
+	flag.IntVar(&sq.MaxCount, "m", 0, "stop after NUM selected lines")
 	flag.Parse()
 	args := flag.Args()
 

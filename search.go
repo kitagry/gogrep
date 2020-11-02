@@ -63,47 +63,64 @@ func colorizedText(s string) string {
 
 func Search(ch chan<- string, data io.Reader, q searchQuery) error {
 	if q.Regexp {
-		return searchWithRegexp(ch, data, q.Query, q.Colorized, q.Invert)
+		return searchWithRegexp(ch, data, q)
 	}
-	search(ch, data, q.Query, q.Colorized, q.Invert)
+	search(ch, data, q)
 	return nil
 }
 
-func search(ch chan<- string, data io.Reader, query string, colorized, invert bool) {
+func search(ch chan<- string, data io.Reader, q searchQuery) {
 	defer close(ch)
 	sc := bufio.NewScanner(data)
 	sc.Split(bufio.ScanLines)
 
+	i := 0
 	for sc.Scan() {
 		t := sc.Text()
-		ind := strings.Index(t, query)
-		if ind != -1 && !invert {
-			if colorized {
-				ch <- t[:ind] + colorizedText(t[ind:ind+len(query)]) + t[ind+len(query):]
+		ind := strings.Index(t, q.Query)
+		if (ind != -1 && q.Invert) || (ind == -1 && !q.Invert) {
+			continue
+		}
+
+		i++
+		if ind != -1 && !q.Invert {
+			if q.Colorized {
+				ch <- t[:ind] + colorizedText(t[ind:ind+len(q.Query)]) + t[ind+len(q.Query):]
 			} else {
 				ch <- t
 			}
-		} else if ind == -1 && invert {
+		} else if ind == -1 && q.Invert {
 			ch <- t
+		}
+
+		if q.MaxCount != 0 && q.MaxCount <= i {
+			break
 		}
 	}
 }
 
-func searchWithRegexp(ch chan<- string, data io.Reader, query string, colorized bool, invert bool) error {
+func searchWithRegexp(ch chan<- string, data io.Reader, q searchQuery) error {
 	defer close(ch)
 	sc := bufio.NewScanner(data)
 	sc.Split(bufio.ScanLines)
 
-	mu, err := regexp.Compile(query)
+	mu, err := regexp.Compile(q.Query)
 	if err != nil {
 		return err
 	}
 
+	i := 0
 	for sc.Scan() {
 		t := sc.Text()
 		match := mu.MatchString(t)
-		if match && !invert {
-			if colorized {
+
+		if (match && q.Invert) || (!match && !q.Invert) {
+			continue
+		}
+
+		i++
+		if match && !q.Invert {
+			if q.Colorized {
 				strs := mu.FindAllString(t, -1)
 				for _, str := range strs {
 					t = strings.Replace(t, str, colorizedText(str), 1)
@@ -112,8 +129,12 @@ func searchWithRegexp(ch chan<- string, data io.Reader, query string, colorized 
 			} else {
 				ch <- t
 			}
-		} else if !match && invert {
+		} else if !match && q.Invert {
 			ch <- t
+		}
+
+		if q.MaxCount != 0 && q.MaxCount <= i {
+			break
 		}
 	}
 	return nil

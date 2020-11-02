@@ -45,6 +45,21 @@ func TestSearch(t *testing.T) {
 			},
 			expected: []string{"aaa", "bbb"},
 		},
+		"search with max count": {
+			query: searchQuery{
+				Query:    "aaa",
+				MaxCount: 1,
+			},
+			expected: []string{"aaa"},
+		},
+		"search regexp with max count": {
+			query: searchQuery{
+				Query:    "a*c",
+				Regexp:   true,
+				MaxCount: 1,
+			},
+			expected: []string{"ccc"},
+		},
 	}
 
 	for m, tt := range tests {
